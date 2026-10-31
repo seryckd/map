@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Voronoi Island Map</title>
+  <script src="https://unpkg.com/simplex-noise@2.4.0/simplex-noise.js"></script>
+  <script src="https://unpkg.com/delaunator@4.0.1/delaunator.min.js"></script>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: #111827;
+      color: #e5e7eb;
+      font: 15px/1.4 system-ui, -apple-system, sans-serif;
+    }
+    main { width: min(94vw, 980px); }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 12px;
+    }
+    h1 { font-size: clamp(18px, 3vw, 28px); margin: 0; }
+    .controls { display: flex; gap: 8px; align-items: center; }
+    button, input {
+      border: 1px solid #4b5563;
+      border-radius: 7px;
+      background: #1f2937;
+      color: inherit;
+      height: 38px;
+    }
+    button { cursor: pointer; padding: 0 14px; font-weight: 700; }
+    button:hover { background: #374151; }
+    input { width: 120px; padding: 0 10px; }
+    canvas {
+      display: block;
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      border-radius: 10px;
+      box-shadow: 0 18px 55px rgb(0 0 0 / 35%);
+      background: #b9d3de;
+      cursor: crosshair;
+    }
+    .hint { margin: 9px 0 0; color: #9ca3af; font-size: 13px; text-align: right; }
+    @media (max-width: 620px) {
+      header { align-items: flex-start; }
+      .controls { flex-wrap: wrap; justify-content: flex-end; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Voronoi Island Map</h1>
+      <div class="controls">
+        <label for="seed">Seed</label>
+        <input id="seed" type="text" value="" aria-label="Map seed" />
+        <button id="generate" type="button">Generate map</button>
+      </div>
+    </header>
+    <canvas id="map" width="900" height="900" aria-label="Random generated island map"></canvas>
+    <p class="hint">Click the map or press Generate for a new island. Press <strong>P</strong> to toggle points.</p>
+  </main>
+
+  <script>
+    const GRIDSIZE = 30;
+    const JITTER = 0.62;
+    const WAVELENGTH = 0.52;
+    const canvas = document.getElementById("map");
+    const seedInput = document.getElementById("seed");
+    let currentMap = null;
+    let showPoints = false;
+
+    function hashSeed(text) {
+      let hash = 2166136261;
+      for (let i = 0; i < text.length; i++) {
+        hash ^= text.charCodeAt(i);
+        hash = Math.imul(hash, 16777619);
+      }
+      return hash >>> 0;
+    }
+
+    function mulberry32(seed) {
+      return function () {
+        let t = seed += 0x6D2B79F5;
+        t = Math.imul(t ^ t >>> 15, t | 1);
+        t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+      };
+    }
+
+    function generateJitteredGridPoints(gridsize, jitter, random) {
+      const points = [];
+      for (let x = 0; x <= gridsize; x++) {
+        for (let y = 0; y <= gridsize; y++) {
+          points.push({
+            x: x + jitter * (random() - random()),
+            y: y + jitter * (random() - random())
+          });
+        }
+      }
+      return points;
+    } 
+
+    function calculateCentroids(points, delaunay) {
+      const numTriangles = delaunay.halfedges.length / 3;
+      const centroids = [];
+      for (let t = 0; t < numTriangles; t++) {
+        let x = 0, y = 0;
+        for (let i = 0; i < 3; i++) {
+          const point = points[delaunay.triangles[3 * t + i]];
+          x += point.x;
+          y += point.y;
+        }
+        centroids[t] = { x: x / 3, y: y / 3 };
+      }
+      return centroids;
+    }
+
+    function triangleOfEdge(edge) { return Math.floor(edge / 3); }
+
+    function nextHalfedge(edge) {
+      return edge % 3 === 2 ? edge - 2 : edge + 1;
+    }
+
+    function edgesAroundPoint(halfedges, start) {
+      const result = [];
+      let incoming = start;
+      do {
+        result.push(incoming);
+        const outgoing = nextHalfedge(incoming);
+        incoming = halfedges[outgoing];
+      } while (incoming !== -1 && incoming !== start);
+      return result;
+    }
+
+    function assignElevation(map, seed) {
+      const random = mulberry32(hashSeed(seed + ":noise"));
+      const noise = new SimplexNoise(random);
+      const elevation = [];
+
+      for (let r = 0; r < map.numRegions; r++) {
+        const nx = map.points[r].x / map.gridsize - 0.5;
+        const ny = map.points[r].y / map.gridsize - 0.5;
+        let height = 0.5
+          + noise.noise2D(nx / WAVELENGTH, ny / WAVELENGTH) / 2
+          + noise.noise2D(2 * nx / WAVELENGTH, 2 * ny / WAVELENGTH) / 3;
+        const distance = 2 * Math.max(Math.abs(nx), Math.abs(ny));
+        elevation[r] = (1 + height - distance) / 2;
+      }
+      return elevation;
+    }
+
+    function clipToSquare(polygon, gridsize) {
+      let output = polygon;
+      output = clipAxis(output, "x", true, gridsize);
+      output = clipAxis(output, "x", false, 0);
+      output = clipAxis(output, "y", true, gridsize);
+      output = clipAxis(output, "y", false, 0);
+      return output;
+    }
+
+    function clipAxis(polygon, axis, keepAbove, boundary) {
+      if (!polygon.length) return [];
+      const result = [];
+      let previous = polygon[polygon.length - 1];
+      let previousInside = keepAbove
+        ? previous[axis] <= boundary
+        : previous[axis] >= boundary;
+
+      for (const current of polygon) {
+        const currentInside = keepAbove
+          ? current[axis] <= boundary
+          : current[axis] >= boundary;
+        if (currentInside !== previousInside) {
+          const dx = current.x - previous.x;
+          const dy = current.y - previous.y;
+          const delta = axis === "x" ? dx : dy;
+          if (Math.abs(delta) > 1e-9) {
+            const t = (boundary - previous[axis]) / delta;
+            result.push({ x: previous.x + dx * t, y: previous.y + dy * t });
+          }
+        }
+        if (currentInside) result.push(current);
+        previous = current;
+        previousInside = currentInside;
+      }
+      return result;
+    }
+
+    function regionPolygon(map, region) {
+      let start = -1;
+      for (let edge = 0; edge < map.numEdges; edge++) {
+        if (map.triangles[nextHalfedge(edge)] === region) {
+          start = edge;
+          break;
+        }
+      }
+      if (start === -1) return [];
+      return edgesAroundPoint(map.halfedges, start)
+        .map(edge => map.centers[triangleOfEdge(edge)]);
+    }
+
+    function elevationColor(height) {
+      if (height < 0.43) return "hsl(211, 68%, 35%)";
+      if (height < 0.50) return "hsl(205, 62%, 48%)";
+      if (height < 0.535) return "hsl(43, 55%, 72%)";
+      if (height < 0.68) return "hsl(96, 34%, 48%)";
+      if (height < 0.82) return "hsl(82, 24%, 37%)";
+      return "hsl(40, 18%, 82%)";
+    }
+
+    function drawCellColors(ctx, map) {
+      ctx.save();
+      ctx.scale(canvas.width / map.gridsize, canvas.height / map.gridsize);
+
+      ctx.fillStyle = "#8fc8df";
+      ctx.fillRect(0, 0, map.gridsize, map.gridsize);
+
+      for (let region = 0; region < map.numRegions; region++) {
+        const polygon = clipToSquare(regionPolygon(map, region), map.gridsize);
+        if (polygon.length < 3) continue;
+        ctx.beginPath();
+        ctx.moveTo(polygon[0].x, polygon[0].y);
+        for (let i = 1; i < polygon.length; i++) ctx.lineTo(polygon[i].x, polygon[i].y);
+        ctx.closePath();
+        ctx.fillStyle = elevationColor(map.elevation[region]);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    function drawCellBoundaries(ctx, map) {
+      ctx.save();
+      ctx.scale(canvas.width / map.gridsize, canvas.height / map.gridsize);
+      ctx.beginPath();
+      ctx.rect(0, 0, map.gridsize, map.gridsize);
+      ctx.clip();
+      ctx.lineWidth = 0.018;
+      ctx.strokeStyle = "rgba(20, 35, 45, 0.25)";
+
+      for (let edge = 0; edge < map.numEdges; edge++) {
+        if (edge < map.halfedges[edge]) {
+          const opposite = map.halfedges[edge];
+          if (opposite === -1) continue;
+          const p = map.centers[triangleOfEdge(edge)];
+          const q = map.centers[triangleOfEdge(opposite)];
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(q.x, q.y);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
+
+    function drawPoints(ctx, map) {
+      ctx.save();
+      ctx.scale(canvas.width / map.gridsize, canvas.height / map.gridsize);
+      ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
+      ctx.strokeStyle = "rgba(15, 23, 42, 0.9)";
+      ctx.lineWidth = 0.035;
+
+      for (const point of map.points) {
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, 0.09, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    function redrawMap() {
+      if (!currentMap) return;
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawCellColors(ctx, currentMap);
+      drawCellBoundaries(ctx, currentMap);
+      if (showPoints) drawPoints(ctx, currentMap);
+    }
+
+    function generate(seed) {
+      if (!window.Delaunator || !window.SimplexNoise) {
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#111827";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "white";
+        ctx.font = "20px system-ui";
+        ctx.fillText("Map libraries could not be loaded.", 30, 50);
+        return;
+      }
+
+      const seedNumber = hashSeed(seed);
+      const random = mulberry32(seedNumber);
+      const points = generateJitteredGridPoints(GRIDSIZE, JITTER, random);
+      const delaunay = Delaunator.from(points, point => point.x, point => point.y);
+      const map = {
+        points,
+        gridsize: GRIDSIZE,
+        numRegions: points.length,
+        numEdges: delaunay.halfedges.length,
+        halfedges: delaunay.halfedges,
+        triangles: delaunay.triangles,
+        centers: calculateCentroids(points, delaunay)
+      };
+      map.elevation = assignElevation(map, seed);
+      currentMap = map;
+      redrawMap();
+    }
+
+    function randomSeed() {
+      const words = ["amber", "cedar", "coral", "dawn", "ember", "forest", "granite", "isle", "jungle", "lagoon", "mist", "north", "ocean", "river", "silver", "stone", "tide", "willow"];
+      const random = mulberry32((Date.now() ^ (Math.random() * 0xffffffff)) >>> 0);
+      return words[Math.floor(random() * words.length)] + "-" + Math.floor(random() * 9000 + 1000);
+    }
+
+    function regenerate() {
+      seedInput.value = randomSeed();
+      generate(seedInput.value);
+    }
+
+    document.getElementById("generate").addEventListener("click", regenerate);
+    canvas.addEventListener("click", regenerate);
+    seedInput.addEventListener("keydown", event => {
+      if (event.key === "Enter") generate(seedInput.value || randomSeed());
+    });
+
+    document.addEventListener("keydown", event => {
+      if (event.key.toLowerCase() !== "p" || event.repeat) return;
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
+      showPoints = !showPoints;
+      redrawMap();
+    });
+
+    regenerate();
+  </script>
+</body>
+</html>
