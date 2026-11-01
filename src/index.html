@@ -28,7 +28,7 @@
     }
     h1 { font-size: clamp(18px, 3vw, 28px); margin: 0; }
     .controls { display: flex; gap: 8px; align-items: center; }
-    button, input {
+    button, input, select {
       border: 1px solid #4b5563;
       border-radius: 7px;
       background: #1f2937;
@@ -38,6 +38,14 @@
     button { cursor: pointer; padding: 0 14px; font-weight: 700; }
     button:hover { background: #374151; }
     input { width: 120px; padding: 0 10px; }
+    select {
+      height: 38px;
+      border: 1px solid #4b5563;
+      border-radius: 7px;
+      background: #1f2937;
+      color: inherit;
+      padding: 0 10px;
+    }
     canvas {
       display: block;
       width: 100%;
@@ -61,6 +69,13 @@
       <div class="controls">
         <label for="seed">Seed</label>
         <input id="seed" type="text" value="" aria-label="Map seed" />
+        <label for="distance">Distance</label>
+        <select id="distance" aria-label="Island distance function">
+          <option value="chebyshev">Chebyshev</option>
+          <option value="squareBump">SquareBump</option>
+          <option value="manhattan">Manhattan</option>
+          <option value="none">None</option>
+        </select>
         <button id="generate" type="button">Generate map</button>
       </div>
     </header>
@@ -74,6 +89,7 @@
     const WAVELENGTH = 0.52;
     const canvas = document.getElementById("map");
     const seedInput = document.getElementById("seed");
+    const distanceInput = document.getElementById("distance");
     let currentMap = null;
     let showPoints = false;
 
@@ -140,6 +156,21 @@
       return result;
     }
 
+    function islandDistance(nx, ny, distanceFunction) {
+      if (distanceFunction === "none") {
+        return nx, ny;
+      }
+      if (distanceFunction === "squareBump") {
+        const x = 2 * nx;
+        const y = 2 * ny;
+        return 1 - (1 - x * x) * (1 - y * y);
+      }
+      if (distanceFunction === "manhattan") {
+        return Math.abs(nx) + Math.abs(ny);
+      }
+      return 2 * Math.max(Math.abs(nx), Math.abs(ny));
+    }
+
     function assignElevation(map, seed) {
       const random = mulberry32(hashSeed(seed + ":noise"));
       const noise = new SimplexNoise(random);
@@ -150,8 +181,11 @@
         const ny = map.points[r].y / map.gridsize - 0.5;
         let height = 0.5
           + noise.noise2D(nx / WAVELENGTH, ny / WAVELENGTH) / 2
-          + noise.noise2D(2 * nx / WAVELENGTH, 2 * ny / WAVELENGTH) / 3;
-        const distance = 2 * Math.max(Math.abs(nx), Math.abs(ny));
+          + noise.noise2D(2 * nx / WAVELENGTH, 2 * ny / WAVELENGTH) / 3
+          + noise.noise2D(3 * nx / WAVELENGTH, 3 * ny / WAVELENGTH) / 4
+          + noise.noise2D(4 * nx / WAVELENGTH, 4 * ny / WAVELENGTH) / 5
+          + noise.noise2D(5 * nx / WAVELENGTH, 5 * ny / WAVELENGTH) / 6;
+        const distance = islandDistance(nx, ny, distanceInput.value);
         elevation[r] = (1 + height - distance) / 2;
       }
       return elevation;
@@ -216,6 +250,39 @@
       return "hsl(40, 18%, 82%)";
     }
 
+    function assignMoisture(map, seed) {
+      const random = mulberry32(hashSeed(seed + ":moisture"));
+      const noise = new SimplexNoise(random);
+      const moisture = [];
+      for (let r = 0; r < map.numRegions; r++) {
+        const nx = map.points[r].x / map.gridsize - 0.5;
+        const ny = map.points[r].y / map.gridsize - 0.5;
+        moisture[r] = (1 + noise.noise2D(nx / WAVELENGTH, ny / WAVELENGTH)) / 2;
+      }
+      return moisture;
+    }
+
+    function biomeColor(map, region) {
+      let e = (map.elevation[region] - 0.5) * 2;
+      const m = map.moisture[region];
+      let red, green, blue;
+
+      if (e < 0.0) {
+        red = 48 + 48 * e;
+        green = 64 + 64 * e;
+        blue = 127 + 127 * e;
+      } else {
+        e = e ** 4;
+        red = 210 - 100 * m;
+        green = 185 - 45 * m;
+        blue = 139 - 45 * m;
+        red = 255 * e + red * (1 - e);
+        green = 255 * e + green * (1 - e);
+        blue = 255 * e + blue * (1 - e);
+      }
+      return `rgb(${red | 0}, ${green | 0}, ${blue | 0})`;
+    }
+
     function drawCellColors(ctx, map) {
       ctx.save();
       ctx.scale(canvas.width / map.gridsize, canvas.height / map.gridsize);
@@ -230,7 +297,7 @@
         ctx.moveTo(polygon[0].x, polygon[0].y);
         for (let i = 1; i < polygon.length; i++) ctx.lineTo(polygon[i].x, polygon[i].y);
         ctx.closePath();
-        ctx.fillStyle = elevationColor(map.elevation[region]);
+        ctx.fillStyle = biomeColor(map, region);
         ctx.fill();
       }
       ctx.restore();
@@ -260,18 +327,37 @@
       ctx.restore();
     }
 
+    function drawTriangleEdges(ctx, map) {
+      ctx.save();
+      ctx.scale(canvas.width / map.gridsize, canvas.height / map.gridsize);
+      ctx.beginPath();
+      ctx.strokeStyle = "black";
+      ctx.lineWidth = 0.025;
+
+      for (let t = 0; t < map.triangles.length; t += 3) {
+        const a = map.points[map.triangles[t]];
+        const b = map.points[map.triangles[t + 1]];
+        const c = map.points[map.triangles[t + 2]];
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.moveTo(b.x, b.y);
+        ctx.lineTo(c.x, c.y);
+        ctx.moveTo(c.x, c.y);
+        ctx.lineTo(a.x, a.y);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+
     function drawPoints(ctx, map) {
       ctx.save();
       ctx.scale(canvas.width / map.gridsize, canvas.height / map.gridsize);
-      ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
-      ctx.strokeStyle = "rgba(15, 23, 42, 0.9)";
-      ctx.lineWidth = 0.035;
+      ctx.fillStyle = "black";
 
       for (const point of map.points) {
         ctx.beginPath();
         ctx.arc(point.x, point.y, 0.09, 0, Math.PI * 2);
         ctx.fill();
-        ctx.stroke();
       }
       ctx.restore();
     }
@@ -282,7 +368,10 @@
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       drawCellColors(ctx, currentMap);
       drawCellBoundaries(ctx, currentMap);
-      if (showPoints) drawPoints(ctx, currentMap);
+      if (showPoints) {
+        drawTriangleEdges(ctx, currentMap);
+        drawPoints(ctx, currentMap);
+      }
     }
 
     function generate(seed) {
@@ -310,6 +399,7 @@
         centers: calculateCentroids(points, delaunay)
       };
       map.elevation = assignElevation(map, seed);
+      map.moisture = assignMoisture(map, seed);
       currentMap = map;
       redrawMap();
     }
@@ -329,6 +419,9 @@
     canvas.addEventListener("click", regenerate);
     seedInput.addEventListener("keydown", event => {
       if (event.key === "Enter") generate(seedInput.value || randomSeed());
+    });
+    distanceInput.addEventListener("change", () => {
+      generate(seedInput.value || randomSeed());
     });
 
     document.addEventListener("keydown", event => {
