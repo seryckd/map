@@ -18,7 +18,7 @@
       color: #e5e7eb;
       font: 15px/1.4 system-ui, -apple-system, sans-serif;
     }
-    main { width: min(94vw, 980px); }
+    main { width: min(94vw, 1180px); }
     header {
       display: flex;
       align-items: center;
@@ -38,6 +38,7 @@
     button { cursor: pointer; padding: 0 14px; font-weight: 700; }
     button:hover { background: #374151; }
     input { width: 120px; padding: 0 10px; }
+    #octaves { width: 64px; padding: 0 6px; }
     select {
       height: 38px;
       border: 1px solid #4b5563;
@@ -46,6 +47,13 @@
       color: inherit;
       padding: 0 10px;
     }
+    .map-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 980px) 170px;
+      gap: 16px;
+      align-items: start;
+    }
+    .map-column { min-width: 0; }
     canvas {
       display: block;
       width: 100%;
@@ -56,9 +64,24 @@
       cursor: crosshair;
     }
     .hint { margin: 9px 0 0; color: #9ca3af; font-size: 13px; text-align: right; }
+    .legend {
+      border: 1px solid #374151;
+      border-radius: 10px;
+      background: #1f2937;
+      padding: 12px;
+    }
+    .legend h2 { margin: 0 0 10px; font-size: 16px; }
+    .legend ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+    .legend li { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+    .legend-swatch { width: 16px; height: 16px; flex: 0 0 16px; border-radius: 3px; border: 1px solid rgb(255 255 255 / 20%); }
+    @media (max-width: 1100px) {
+      .map-layout { grid-template-columns: 1fr; }
+      .legend ul { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
     @media (max-width: 620px) {
       header { align-items: flex-start; }
       .controls { flex-wrap: wrap; justify-content: flex-end; }
+      .legend ul { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -72,15 +95,40 @@
         <label for="distance">Distance</label>
         <select id="distance" aria-label="Island distance function">
           <option value="chebyshev">Chebyshev</option>
-          <option value="squareBump">SquareBump</option>
+          <option value="squareBump" selected>SquareBump</option>
           <option value="manhattan">Manhattan</option>
           <option value="none">None</option>
         </select>
+        <label for="octaves">Octaves</label>
+        <input id="octaves" type="number" min="1" max="8" value="3" aria-label="Elevation octaves" />
         <button id="generate" type="button">Generate map</button>
       </div>
     </header>
-    <canvas id="map" width="900" height="900" aria-label="Random generated island map"></canvas>
-    <p class="hint">Click the map or press Generate for a new island. Press <strong>P</strong> to toggle points.</p>
+    <div class="map-layout">
+      <div class="map-column">
+        <canvas id="map" width="900" height="900" aria-label="Random generated island map"></canvas>
+        <p class="hint">Click the map or press Generate for a new island. Press <strong>P</strong> to toggle points.</p>
+      </div>
+      <aside class="legend" aria-label="Biome legend">
+        <h2>Biomes</h2>
+        <ul>
+          <li><span class="legend-swatch" style="background:#44447a"></span>Deep sea</li>
+          <li><span class="legend-swatch" style="background:#5577aa"></span>Shallow sea</li>
+          <li><span class="legend-swatch" style="background:#d2b98b"></span>Desert</li>
+          <li><span class="legend-swatch" style="background:#c9d29b"></span>Dry grassland</li>
+          <li><span class="legend-swatch" style="background:#88aa55"></span>Grassland</li>
+          <li><span class="legend-swatch" style="background:#559944"></span>Temperate forest</li>
+          <li><span class="legend-swatch" style="background:#337755"></span>Rain forest</li>
+          <li><span class="legend-swatch" style="background:#679459"></span>Woodland</li>
+          <li><span class="legend-swatch" style="background:#448855"></span>Wet woodland</li>
+          <li><span class="legend-swatch" style="background:#889977"></span>High woodland</li>
+          <li><span class="legend-swatch" style="background:#99aa77"></span>High forest</li>
+          <li><span class="legend-swatch" style="background:#888888"></span>Rock</li>
+          <li><span class="legend-swatch" style="background:#bbbbaa"></span>Snowy mountain</li>
+          <li><span class="legend-swatch" style="background:#dddde4"></span>Snow</li>
+        </ul>
+      </aside>
+    </div>
   </main>
 
   <script>
@@ -90,6 +138,7 @@
     const canvas = document.getElementById("map");
     const seedInput = document.getElementById("seed");
     const distanceInput = document.getElementById("distance");
+    const octavesInput = document.getElementById("octaves");
     let currentMap = null;
     let showPoints = false;
 
@@ -179,12 +228,14 @@
       for (let r = 0; r < map.numRegions; r++) {
         const nx = map.points[r].x / map.gridsize - 0.5;
         const ny = map.points[r].y / map.gridsize - 0.5;
-        let height = 0.5
-          + noise.noise2D(nx / WAVELENGTH, ny / WAVELENGTH) / 2
-          + noise.noise2D(2 * nx / WAVELENGTH, 2 * ny / WAVELENGTH) / 3
-          + noise.noise2D(3 * nx / WAVELENGTH, 3 * ny / WAVELENGTH) / 4
-          + noise.noise2D(4 * nx / WAVELENGTH, 4 * ny / WAVELENGTH) / 5
-          + noise.noise2D(5 * nx / WAVELENGTH, 5 * ny / WAVELENGTH) / 6;
+        let height = 0.5;
+        const octaveCount = Number(octavesInput.value);
+        for (let octave = 1; octave <= octaveCount; octave++) {
+          height += noise.noise2D(
+            octave * nx / WAVELENGTH,
+            octave * ny / WAVELENGTH
+          ) / (octave + 1);
+        }
         const distance = islandDistance(nx, ny, distanceInput.value);
         elevation[r] = (1 + height - distance) / 2;
       }
@@ -262,25 +313,34 @@
       return moisture;
     }
 
-    function biomeColor(map, region) {
-      let e = (map.elevation[region] - 0.5) * 2;
-      const m = map.moisture[region];
-      let red, green, blue;
+    function biomeColorDiscrete(map, region) {
+      const elevation = map.elevation[region];
+      if (elevation < 0.43) return "#44447a"; // deep sea
+      if (elevation < 0.50) return "#5577aa"; // shallow sea
 
-      if (e < 0.0) {
-        red = 48 + 48 * e;
-        green = 64 + 64 * e;
-        blue = 127 + 127 * e;
-      } else {
-        e = e ** 4;
-        red = 210 - 100 * m;
-        green = 185 - 45 * m;
-        blue = 139 - 45 * m;
-        red = 255 * e + red * (1 - e);
-        green = 255 * e + green * (1 - e);
-        blue = 255 * e + blue * (1 - e);
+      const e = 2.0 * (elevation - 0.5);
+      const m = map.moisture[region] ** 2;
+
+      if (e > 0.6) {
+        if (m < 0.2) return "#888888";
+        if (m < 0.5) return "#bbbbaa";
+        return "#dddde4";
       }
-      return `rgb(${red | 0}, ${green | 0}, ${blue | 0})`;
+      if (e > 0.4) {
+        if (m < 0.33) return "#c9d29b";
+        if (m < 0.66) return "#889977";
+        return "#99aa77";
+      }
+      if (e > 0.2) {
+        if (m < 0.16) return "#c9d29b";
+        if (m < 0.50) return "#88aa55";
+        if (m < 0.83) return "#679459";
+        return "#448855";
+      }
+      if (m < 0.16) return "#d2b98b";
+      if (m < 0.33) return "#88aa55";
+      if (m < 0.66) return "#559944";
+      return "#337755";
     }
 
     function drawCellColors(ctx, map) {
@@ -297,7 +357,7 @@
         ctx.moveTo(polygon[0].x, polygon[0].y);
         for (let i = 1; i < polygon.length; i++) ctx.lineTo(polygon[i].x, polygon[i].y);
         ctx.closePath();
-        ctx.fillStyle = biomeColor(map, region);
+        ctx.fillStyle = biomeColorDiscrete(map, region);
         ctx.fill();
       }
       ctx.restore();
@@ -421,6 +481,11 @@
       if (event.key === "Enter") generate(seedInput.value || randomSeed());
     });
     distanceInput.addEventListener("change", () => {
+      generate(seedInput.value || randomSeed());
+    });
+    octavesInput.addEventListener("change", () => {
+      const octaveCount = Math.min(8, Math.max(1, Number.parseInt(octavesInput.value, 10) || 1));
+      octavesInput.value = octaveCount;
       generate(seedInput.value || randomSeed());
     });
 
