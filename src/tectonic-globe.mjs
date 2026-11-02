@@ -3,6 +3,7 @@ import {
   generateIcosphereCells,
   generatePlateTerrain,
   applyGlobalShaping,
+  getCellInspectionColor,
   getSurfaceElevation
 } from "./tectonic-globe-core.mjs";
 
@@ -13,6 +14,8 @@ const continentalInput = document.getElementById("continental-proportion");
 const continentalValue = document.getElementById("continental-value");
 const globalBiasInput = document.getElementById("global-bias");
 const globalBiasValue = document.getElementById("global-bias-value");
+const inspectionViewInput = document.getElementById("inspection-view");
+const viewLegend = document.getElementById("view-legend");
 const generateButton = document.getElementById("generate");
 const status = document.getElementById("status");
 const cellCount = document.getElementById("cell-count");
@@ -20,6 +23,8 @@ const SUBDIVISIONS = 3;
 const ELEVATION_EXAGGERATION = 0.55;
 
 let currentCells = [];
+let currentBoundaries = [];
+let currentInspectionView = "terrain";
 let THREE;
 let renderer;
 let camera;
@@ -51,25 +56,14 @@ function getVertexElevations(cells) {
   ]));
 }
 
-function getElevationColor(elevation) {
-  const clamp = value => Math.max(0, Math.min(1, value));
-  const mix = (start, end, amount) => start.map((value, index) =>
-    value + (end[index] - value) * amount);
-
-  if (elevation < 0) {
-    return mix([0.3, 0.59, 0.68], [0.07, 0.22, 0.34], clamp(-elevation / 0.5));
-  }
-  return mix([0.74, 0.69, 0.48], [0.49, 0.37, 0.26], clamp(elevation / 0.45));
-}
-
-function createCellGeometry(cells) {
+function createCellGeometry(cells, view) {
   const positions = new Float32Array(cells.length * 9);
   const colors = new Float32Array(cells.length * 9);
   const vertexElevations = getVertexElevations(cells);
 
   let offset = 0;
   for (const cell of cells) {
-    const color = getElevationColor(cell.elevation);
+    const color = getCellInspectionColor(cell, view);
     for (const vertex of cell.vertices) {
       const key = `${vertex.x},${vertex.y},${vertex.z}`;
       const elevation = vertexElevations.get(key);
@@ -122,8 +116,8 @@ function createBoundaryGeometry(cells, boundaries) {
   return geometry;
 }
 
-function renderCells(cells, boundaries) {
-  const geometry = createCellGeometry(cells);
+function renderCells(cells, boundaries, view) {
+  const geometry = createCellGeometry(cells, view);
   const surface = new THREE.Mesh(
     geometry,
     new THREE.MeshStandardMaterial({
@@ -136,10 +130,13 @@ function renderCells(cells, boundaries) {
     new THREE.EdgesGeometry(geometry),
     new THREE.LineBasicMaterial({ color: 0x142a32, transparent: true, opacity: 0.7 })
   );
-  const boundaryLines = new THREE.LineSegments(
-    createBoundaryGeometry(cells, boundaries),
-    new THREE.LineBasicMaterial({ vertexColors: true, linewidth: 2 })
-  );
+  const children = [surface, edges];
+  if (view === "boundaries") {
+    children.push(new THREE.LineSegments(
+      createBoundaryGeometry(cells, boundaries),
+      new THREE.LineBasicMaterial({ vertexColors: true, linewidth: 2 })
+    ));
+  }
 
   for (const child of globeGroup.children) {
     child.geometry?.dispose();
@@ -150,7 +147,16 @@ function renderCells(cells, boundaries) {
     }
   }
   globeGroup.clear();
-  globeGroup.add(surface, edges, boundaryLines);
+  globeGroup.add(...children);
+}
+
+function updateInspectionView() {
+  currentInspectionView = inspectionViewInput.value;
+  for (const legend of viewLegend.querySelectorAll("[data-view-legend]")) {
+    legend.classList.toggle("active", legend.dataset.viewLegend === currentInspectionView);
+  }
+  canvas.setAttribute("aria-label", `${inspectionViewInput.selectedOptions[0].text} globe view`);
+  if (currentCells.length) renderCells(currentCells, currentBoundaries, currentInspectionView);
 }
 
 function generate() {
@@ -177,7 +183,8 @@ function generate() {
       Number(globalBiasInput.value) / 100
     );
     currentCells = shapedTerrain.cells;
-    renderCells(currentCells, tectonicTerrain.boundaries);
+    currentBoundaries = tectonicTerrain.boundaries;
+    renderCells(currentCells, currentBoundaries, currentInspectionView);
     cellCount.textContent = `${currentCells.length.toLocaleString()} spherical cells · ${plates.length} plates`;
     const landPercentage = Math.round(
       currentCells.filter(cell => cell.elevation > 0).length / currentCells.length * 100
@@ -239,6 +246,7 @@ async function initialize() {
       globalBiasValue.value = `${globalBiasInput.value}%`;
     });
     globalBiasInput.addEventListener("change", generate);
+    inspectionViewInput.addEventListener("change", updateInspectionView);
     seedInput.addEventListener("keydown", event => {
       if (event.key === "Enter") generate();
     });
@@ -249,12 +257,14 @@ async function initialize() {
       requestAnimationFrame(animate);
     }
     generate();
+    updateInspectionView();
     animate();
   } catch (error) {
     showError(error);
     generateButton.disabled = true;
     continentalInput.disabled = true;
     globalBiasInput.disabled = true;
+    inspectionViewInput.disabled = true;
   }
 }
 

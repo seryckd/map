@@ -143,24 +143,28 @@ spherical sampling; do not apply a center-focused mask.
 
 ## Task 5: Add terrain inspection views and verify Stage 1 end to end
 
+**Status:** Complete; verified with Node unit tests and Chromium.
+
 **Description:** Add view controls to inspect terrain, plate ownership, and
 boundary classes, then run the full Stage 1 browser acceptance pass and make
 only in-scope fixes.
 
 **Acceptance criteria:**
-- [ ] Terrain, plate, and tectonic-boundary views can be selected to inspect
+- [x] Terrain, plate, and tectonic-boundary views can be selected to inspect
   generated data.
-- [ ] All five Stage 1 steps run in order and their outputs are represented in
+- [x] All five Stage 1 steps run in order and their outputs are represented in
   the in-memory spherical cell records.
-- [ ] All Stage 1 spec success criteria pass without changing
+- [x] All Stage 1 spec success criteria pass without changing
   `src/redblob.html` or implementing later stages.
 
 **Verification:**
-- [ ] Open the page through `python3 -m http.server 8000` and complete the
+- [x] Open the page through `python3 -m http.server 8000` and complete the
   interaction, determinism, crust, boundary, distribution, seam, and pole
-  checks from `SPEC-macro-shape.md`.
-- [ ] Confirm library-loading and generation errors are shown in the page.
-- [ ] Review `git diff` to confirm only scoped files changed.
+  checks from `SPEC-macro-shape.md`; 17 Node tests passed and Chromium
+  confirmed all three views, responsive controls, rotation/zoom, deterministic
+  rendering, and layouts at 320–1440px.
+- [x] Confirm library-loading and generation errors are shown in the page.
+- [x] Review `git diff` to confirm only scoped files changed.
 
 **Dependencies:** Task 4
 

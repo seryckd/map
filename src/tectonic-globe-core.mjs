@@ -459,3 +459,50 @@ export function applyGlobalShaping(cells, seed, globalBias = 0) {
 export function getSurfaceElevation(cell) {
   return cell.elevation - (cell.globalBias ?? 0);
 }
+
+const PLATE_COLORS = [
+  [0.82, 0.39, 0.32], [0.34, 0.65, 0.81], [0.76, 0.67, 0.35],
+  [0.47, 0.71, 0.48], [0.71, 0.48, 0.75], [0.32, 0.72, 0.67],
+  [0.86, 0.56, 0.33], [0.42, 0.53, 0.78], [0.74, 0.49, 0.48],
+  [0.55, 0.72, 0.34], [0.82, 0.61, 0.76], [0.37, 0.64, 0.57],
+  [0.72, 0.57, 0.34], [0.39, 0.69, 0.82], [0.82, 0.72, 0.43],
+  [0.52, 0.65, 0.43], [0.66, 0.48, 0.73], [0.34, 0.68, 0.65]
+];
+const BOUNDARY_COLORS = {
+  convergent: [0.94, 0.35, 0.28],
+  divergent: [0.36, 0.78, 0.91],
+  transform: [0.98, 0.79, 0.34]
+};
+
+function mixColors(start, end, amount) {
+  const clampedAmount = Math.max(0, Math.min(1, amount));
+  return start.map((channel, index) =>
+    channel + (end[index] - channel) * clampedAmount);
+}
+
+function getTerrainColor(elevation) {
+  return elevation < 0
+    ? mixColors([0.3, 0.59, 0.68], [0.07, 0.22, 0.34], -elevation / 0.5)
+    : mixColors([0.74, 0.69, 0.48], [0.49, 0.37, 0.26], elevation / 0.45);
+}
+
+function getDominantBoundary(cell) {
+  const boundaryCounts = { convergent: 0, divergent: 0, transform: 0 };
+  for (const boundary of cell.boundaries || []) {
+    if (boundary.type in boundaryCounts) boundaryCounts[boundary.type]++;
+  }
+
+  return Object.keys(boundaryCounts).reduce((dominant, type) =>
+    boundaryCounts[type] > boundaryCounts[dominant] ? type : dominant,
+  "convergent");
+}
+
+export function getCellInspectionColor(cell, view) {
+  if (view === "terrain") return getTerrainColor(cell.elevation);
+  if (view === "plates") return PLATE_COLORS[cell.plateId % PLATE_COLORS.length];
+  if (view === "boundaries") {
+    if (!cell.boundaries?.length) return [0.17, 0.23, 0.27];
+    return BOUNDARY_COLORS[getDominantBoundary(cell)];
+  }
+  throw new RangeError(`Unknown terrain inspection view: ${view}`);
+}

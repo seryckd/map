@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   applyTectonicRelief,
   applyGlobalShaping,
+  getCellInspectionColor,
   getSurfaceElevation,
   generateIcosphereCells,
   generatePlateTerrain
@@ -248,4 +249,52 @@ test("global bias shifts sea level without changing rendered terrain relief", ()
         - getSurfaceElevation(highBias.cells[cell.index])
     ) < 1e-12);
   }
+});
+
+test("provides deterministic terrain, plate, and boundary inspection colors", () => {
+  const cells = generateIcosphereCells("inspection-world", 2);
+  const terrain = generatePlateTerrain(cells, "inspection-world", 0.4);
+  const tectonic = applyTectonicRelief(terrain.cells, terrain.plates, "inspection-world");
+  const { cells: shaped } = applyGlobalShaping(tectonic.cells, "inspection-world");
+  const firstBoundaryCell = shaped.find(cell => cell.boundaries.length > 0);
+  const interiorCell = shaped.find(cell => cell.boundaries.length === 0);
+
+  assert.notDeepEqual(
+    getCellInspectionColor(shaped[0], "terrain"),
+    getCellInspectionColor(shaped.at(-1), "terrain")
+  );
+  assert.notDeepEqual(
+    getCellInspectionColor(shaped[0], "plates"),
+    getCellInspectionColor(shaped.find(cell => cell.plateId !== shaped[0].plateId), "plates")
+  );
+  assert.deepEqual(
+    getCellInspectionColor(shaped[0], "plates"),
+    getCellInspectionColor(shaped[0], "plates")
+  );
+  assert.notDeepEqual(
+    getCellInspectionColor(firstBoundaryCell, "boundaries"),
+    getCellInspectionColor(interiorCell, "boundaries")
+  );
+  for (const cell of shaped) {
+    for (const view of ["terrain", "plates", "boundaries"]) {
+      const color = getCellInspectionColor(cell, view);
+      assert.equal(color.length, 3);
+      assert.ok(color.every(channel => channel >= 0 && channel <= 1));
+    }
+    assert.ok(Number.isFinite(cell.elevation));
+    assert.ok(Number.isFinite(cell.baseElevation));
+    assert.ok(Number.isFinite(cell.tectonicRelief));
+    assert.ok(Number.isFinite(cell.shelfEffect));
+    assert.ok(Number.isFinite(cell.ridgeEffect));
+    assert.ok(Number.isInteger(cell.plateId));
+    assert.ok(["continental", "oceanic"].includes(cell.crustType));
+    assert.ok(Array.isArray(cell.boundaries));
+  }
+});
+
+test("rejects unknown terrain inspection views", () => {
+  assert.throws(
+    () => getCellInspectionColor({ elevation: 0 }, "unknown"),
+    RangeError
+  );
 });

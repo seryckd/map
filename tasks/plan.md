@@ -73,7 +73,7 @@ are out of scope.
 
 ### Phase 3: Inspection and acceptance
 
-- [ ] Task 5: Add terrain inspection views and verify Stage 1 end to end
+- [x] Task 5: Add terrain inspection views and verify Stage 1 end to end
 
 ### Checkpoint: Complete
 
