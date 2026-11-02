@@ -65,7 +65,7 @@ are out of scope.
 
 ### Checkpoint: Terrain pipeline
 
-- [ ] Convergent, divergent, and transform boundaries are classified and
+- [x] Convergent, divergent, and transform boundaries are classified and
   visible; elevation responds to those classes.
 - [ ] Global land/sea controls, shelves, and ridges work without a radial
   center mask or spherical-coordinate discontinuities.
