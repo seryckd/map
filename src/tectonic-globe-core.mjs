@@ -486,9 +486,12 @@ function mixColors(start, end, amount) {
 }
 
 function getTerrainColor(elevation) {
-  return elevation < 0
-    ? mixColors([0.3, 0.59, 0.68], [0.07, 0.22, 0.34], -elevation / 0.5)
-    : mixColors([0.74, 0.69, 0.48], [0.49, 0.37, 0.26], elevation / 0.45);
+  if (elevation < 0) {
+    const depth = Math.pow(-elevation / 0.5, 0.8);
+    return mixColors([0.3, 0.59, 0.68], [0.025, 0.07, 0.15], depth);
+  }
+  const height = Math.pow(elevation / 0.4, 0.8);
+  return mixColors([0.74, 0.69, 0.48], [0.28, 0.17, 0.1], height);
 }
 
 function getDominantBoundary(cell) {

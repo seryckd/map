@@ -297,6 +297,16 @@ test("provides deterministic terrain, plate, and boundary inspection colors", ()
   }
 });
 
+test("darkens colors strongly as terrain rises or ocean depth increases", () => {
+  const luminance = elevation => {
+    const [red, green, blue] = getCellInspectionColor({ elevation }, "terrain");
+    return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+  };
+
+  assert.ok(luminance(0.1) - luminance(0.4) > 0.23);
+  assert.ok(luminance(-0.1) - luminance(-0.4) > 0.23);
+});
+
 test("rejects unknown terrain inspection views", () => {
   assert.throws(
     () => getCellInspectionColor({ elevation: 0 }, "unknown"),
