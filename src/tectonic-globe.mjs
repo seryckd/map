@@ -3,6 +3,7 @@ import {
   generateIcosphereCells,
   generatePlateTerrain,
   applyGlobalShaping,
+  createRandomSeed,
   getCellInspectionColor,
   getSurfaceElevation
 } from "./tectonic-globe-core.mjs";
@@ -17,6 +18,7 @@ const globalBiasValue = document.getElementById("global-bias-value");
 const inspectionViewInput = document.getElementById("inspection-view");
 const viewLegend = document.getElementById("view-legend");
 const generateButton = document.getElementById("generate");
+const randomSeedButton = document.getElementById("generate-random");
 const status = document.getElementById("status");
 const cellCount = document.getElementById("cell-count");
 const SUBDIVISIONS = 3;
@@ -238,6 +240,10 @@ async function initialize() {
     resizeObserver.observe(viewport);
 
     generateButton.addEventListener("click", generate);
+    randomSeedButton.addEventListener("click", () => {
+      seedInput.value = createRandomSeed();
+      generate();
+    });
     continentalInput.addEventListener("input", () => {
       continentalValue.value = `${continentalInput.value}%`;
     });
@@ -262,6 +268,7 @@ async function initialize() {
   } catch (error) {
     showError(error);
     generateButton.disabled = true;
+    randomSeedButton.disabled = true;
     continentalInput.disabled = true;
     globalBiasInput.disabled = true;
     inspectionViewInput.disabled = true;

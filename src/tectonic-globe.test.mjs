@@ -4,11 +4,16 @@ import assert from "node:assert/strict";
 import {
   applyTectonicRelief,
   applyGlobalShaping,
+  createRandomSeed,
   getCellInspectionColor,
   getSurfaceElevation,
   generateIcosphereCells,
   generatePlateTerrain
 } from "./tectonic-globe-core.mjs";
+
+test("creates a random world seed from a 32-bit random value", () => {
+  assert.equal(createRandomSeed(() => 0.5), "world-80000000");
+});
 
 test("generates four triangular neighbors for each spherical cell", () => {
   const cells = generateIcosphereCells("test-world", 2);

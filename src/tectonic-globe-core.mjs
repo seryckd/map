@@ -460,6 +460,11 @@ export function getSurfaceElevation(cell) {
   return cell.elevation - (cell.globalBias ?? 0);
 }
 
+export function createRandomSeed(random = Math.random) {
+  const value = Math.floor(random() * 0x100000000);
+  return `world-${value.toString(16).padStart(8, "0")}`;
+}
+
 const PLATE_COLORS = [
   [0.82, 0.39, 0.32], [0.34, 0.65, 0.81], [0.76, 0.67, 0.35],
   [0.47, 0.71, 0.48], [0.71, 0.48, 0.75], [0.32, 0.72, 0.67],
