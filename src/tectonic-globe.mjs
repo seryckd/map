@@ -22,7 +22,7 @@ const randomSeedButton = document.getElementById("generate-random");
 const status = document.getElementById("status");
 const cellCount = document.getElementById("cell-count");
 const SUBDIVISIONS = 3;
-const ELEVATION_EXAGGERATION = 0.55;
+const ELEVATION_EXAGGERATION = 0.0;
 
 let currentCells = [];
 let currentBoundaries = [];
