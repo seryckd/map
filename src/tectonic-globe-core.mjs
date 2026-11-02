@@ -229,13 +229,148 @@ export function generatePlateTerrain(cells, seed, continentalProportion = 0.4) {
       }
     }
 
+    const baseElevation = nearestPlate.baseElevation + (random() - 0.5) * 0.03;
     return {
       ...cell,
       plateId: nearestPlate.id,
       crustType: nearestPlate.crustType,
-      elevation: nearestPlate.baseElevation + (random() - 0.5) * 0.03
+      baseElevation,
+      elevation: baseElevation
     };
   });
 
   return { cells: terrainCells, plates };
+}
+
+function crossProduct(a, b) {
+  return {
+    x: a.y * b.z - a.z * b.y,
+    y: a.z * b.x - a.x * b.z,
+    z: a.x * b.y - a.y * b.x
+  };
+}
+
+function dotProduct(a, b) {
+  return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
+function subtract(a, b) {
+  return { x: a.x - b.x, y: a.y - b.y, z: a.z - b.z };
+}
+
+export function applyTectonicRelief(cells, plates, seed) {
+  if (!Array.isArray(cells) || !Array.isArray(plates) || plates.length < 2) {
+    throw new RangeError("Spherical cells and at least two plates are required.");
+  }
+
+  const random = createRandom(`${seed}:motion`);
+  const movingPlates = plates.map(plate => {
+    const z = random() * 2 - 1;
+    const angle = random() * Math.PI * 2;
+    const speed = 0.25 + random() * 0.55;
+    const radius = Math.sqrt(1 - z * z) * speed;
+    return {
+      ...plate,
+      rotationVector: {
+        x: radius * Math.cos(angle),
+        y: z * speed,
+        z: radius * Math.sin(angle)
+      }
+    };
+  });
+  const plateById = new Map(movingPlates.map(plate => [plate.id, plate]));
+  const relief = cells.map(() => 0);
+  const boundaries = [];
+  const cellBoundaries = cells.map(() => []);
+  const motionThreshold = 0.08;
+
+  for (const cellA of cells) {
+    for (const neighborId of cellA.neighbors) {
+      if (neighborId <= cellA.index) continue;
+      const cellB = cells[neighborId];
+      if (!cellB || cellA.plateId === cellB.plateId) continue;
+
+      const plateA = plateById.get(cellA.plateId);
+      const plateB = plateById.get(cellB.plateId);
+      if (!plateA || !plateB) {
+        throw new RangeError("Every cell must reference a generated plate.");
+      }
+
+      const midpoint = normalize({
+        x: cellA.center.x + cellB.center.x,
+        y: cellA.center.y + cellB.center.y,
+        z: cellA.center.z + cellB.center.z
+      });
+      const centerDifference = subtract(cellB.center, cellA.center);
+      const tangentDirection = normalize({
+        x: centerDifference.x - midpoint.x * dotProduct(centerDifference, midpoint),
+        y: centerDifference.y - midpoint.y * dotProduct(centerDifference, midpoint),
+        z: centerDifference.z - midpoint.z * dotProduct(centerDifference, midpoint)
+      });
+      const velocityA = crossProduct(plateA.rotationVector, midpoint);
+      const velocityB = crossProduct(plateB.rotationVector, midpoint);
+      const motionRate = dotProduct(subtract(velocityB, velocityA), tangentDirection);
+      const type = motionRate > motionThreshold
+        ? "divergent"
+        : motionRate < -motionThreshold
+          ? "convergent"
+          : "transform";
+
+      let reliefA;
+      let reliefB;
+      if (type === "convergent") {
+        if (cellA.crustType === cellB.crustType) {
+          reliefA = cellA.crustType === "continental" ? 0.09 : -0.09;
+          reliefB = cellA.crustType === "continental" ? 0.09 : 0.065;
+        } else {
+          reliefA = cellA.crustType === "oceanic" ? -0.09 : 0.065;
+          reliefB = cellB.crustType === "oceanic" ? -0.09 : 0.065;
+        }
+      } else if (type === "divergent") {
+        reliefA = -0.045;
+        reliefB = -0.045;
+      } else {
+        reliefA = cellA.plateId < cellB.plateId ? 0.035 : -0.035;
+        reliefB = -reliefA;
+      }
+
+      relief[cellA.index] += reliefA;
+      relief[cellB.index] += reliefB;
+      const boundary = {
+        cellA: cellA.index,
+        cellB: cellB.index,
+        plateA: cellA.plateId,
+        plateB: cellB.plateId,
+        type,
+        motionRate,
+        reliefA,
+        reliefB
+      };
+      boundaries.push(boundary);
+      cellBoundaries[cellA.index].push({
+        neighborId: cellB.index,
+        type,
+        relief: reliefA
+      });
+      cellBoundaries[cellB.index].push({
+        neighborId: cellA.index,
+        type,
+        relief: reliefB
+      });
+    }
+  }
+
+  const terrainCells = cells.map((cell, index) => {
+    const baseElevation = cell.baseElevation ?? cell.elevation;
+    const tectonicRelief = Math.max(-0.18, Math.min(0.18, relief[index]));
+    return {
+      ...cell,
+      baseElevation,
+      tectonicRelief,
+      elevation: baseElevation + tectonicRelief,
+      boundaries: cellBoundaries[index]
+    };
+  });
+
+  return { cells: terrainCells, plates: movingPlates, boundaries };
 }

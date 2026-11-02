@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  applyTectonicRelief,
   generateIcosphereCells,
   generatePlateTerrain
 } from "./tectonic-globe-core.mjs";
@@ -77,6 +78,7 @@ test("assigns deterministic spherical plates and distinct crust elevations", () 
   for (const cell of result.cells) {
     const plate = result.plates[cell.plateId];
     assert.equal(cell.crustType, plate.crustType);
+    assert.equal(cell.baseElevation, cell.elevation);
     const nearestPlate = result.plates.reduce((nearest, candidate) => {
       const distance = cell.center.x * candidate.center.x
         + cell.center.y * candidate.center.y
@@ -106,4 +108,62 @@ test("changes plate terrain with a different seed and supports proportion endpoi
   const allContinental = generatePlateTerrain(cells, "fixed-mesh", 1);
   assert.ok(allOceanic.plates.every(plate => plate.crustType === "oceanic"));
   assert.ok(allContinental.plates.every(plate => plate.crustType === "continental"));
+});
+
+test("classifies moving plate boundaries and applies deterministic bounded relief", () => {
+  const cells = generateIcosphereCells("tectonic-mesh", 2);
+  const terrain = generatePlateTerrain(cells, "tectonic-world", 0.4);
+  const result = applyTectonicRelief(terrain.cells, terrain.plates, "tectonic-world");
+  const repeated = applyTectonicRelief(terrain.cells, terrain.plates, "tectonic-world");
+  const types = new Set(result.boundaries.map(boundary => boundary.type));
+  const requiredTypes = new Set(["convergent", "divergent", "transform"]);
+
+  assert.deepEqual(result, repeated);
+  assert.ok(result.boundaries.length > 0);
+  assert.deepEqual(types, requiredTypes);
+
+  for (const boundary of result.boundaries) {
+    const cellA = result.cells[boundary.cellA];
+    const cellB = result.cells[boundary.cellB];
+    assert.equal(
+      boundary.type,
+      boundary.motionRate > 0.08
+        ? "divergent"
+        : boundary.motionRate < -0.08
+          ? "convergent"
+          : "transform"
+    );
+    assert.notEqual(cellA.plateId, cellB.plateId);
+    assert.ok(cellA.boundaries.some(edge =>
+      edge.neighborId === cellB.index && edge.type === boundary.type));
+    assert.ok(cellB.boundaries.some(edge =>
+      edge.neighborId === cellA.index && edge.type === boundary.type));
+    assert.ok(Math.abs(boundary.reliefA) <= 0.1);
+    assert.ok(Math.abs(boundary.reliefB) <= 0.1);
+  }
+
+  for (const cell of result.cells) {
+    assert.ok(Math.abs(cell.tectonicRelief) <= 0.18);
+    assert.equal(cell.elevation, cell.baseElevation + cell.tectonicRelief);
+  }
+
+  const convergent = result.boundaries.filter(boundary => boundary.type === "convergent");
+  const divergent = result.boundaries.filter(boundary => boundary.type === "divergent");
+  const transform = result.boundaries.filter(boundary => boundary.type === "transform");
+  assert.ok(convergent.some(boundary => boundary.reliefA > 0 || boundary.reliefB > 0));
+  assert.ok(convergent.some(boundary => boundary.reliefA < 0 || boundary.reliefB < 0));
+  assert.ok(divergent.every(boundary => boundary.reliefA < 0 && boundary.reliefB < 0));
+  assert.ok(transform.every(boundary => boundary.reliefA * boundary.reliefB < 0));
+});
+
+test("produces all boundary classes across representative seeded worlds", () => {
+  const requiredTypes = new Set(["convergent", "divergent", "transform"]);
+  const observedTypes = new Set();
+  for (const seed of ["motion-a", "motion-b", "motion-c", "motion-d"]) {
+    const cells = generateIcosphereCells(seed, 2);
+    const terrain = generatePlateTerrain(cells, seed, 0.4);
+    const result = applyTectonicRelief(terrain.cells, terrain.plates, seed);
+    result.boundaries.forEach(boundary => observedTypes.add(boundary.type));
+  }
+  assert.deepEqual(observedTypes, requiredTypes);
 });

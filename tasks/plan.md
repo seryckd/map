@@ -60,7 +60,7 @@ are out of scope.
 
 ### Phase 2: Tectonic macro relief
 
-- [ ] Task 3: Classify moving plate boundaries and apply tectonic relief
+- [x] Task 3: Classify moving plate boundaries and apply tectonic relief
 - [ ] Task 4: Add spherical global shaping, shelves, and ridges
 
 ### Checkpoint: Terrain pipeline

@@ -76,24 +76,26 @@ proportion control and preserve the resulting data in each cell record.
 
 ## Task 3: Classify moving plate boundaries and apply tectonic relief
 
+**Status:** Complete; verified with Node unit tests and Chromium.
+
 **Description:** Assign deterministic spherical rotation vectors to plates,
 derive relative motion at adjacent plate boundaries, classify each boundary
 as convergent, divergent, or transform, and apply corresponding bounded
 uplift, trench, rift, or shear relief.
 
 **Acceptance criteria:**
-- [ ] Inter-plate boundaries receive one of the three required classifications
+- [x] Inter-plate boundaries receive one of the three required classifications
   based on relative tangential motion.
-- [ ] Classified boundaries affect nearby cell elevations with distinct,
+- [x] Classified boundaries affect nearby cell elevations with distinct,
   bounded tectonic relief.
-- [ ] Boundary classification and resulting elevations are deterministic for
+- [x] Boundary classification and resulting elevations are deterministic for
   a fixed seed and settings.
 
 **Verification:**
-- [ ] Inspect generated boundary metadata and confirm all classes can be
+- [x] Inspect generated boundary metadata and confirm all classes can be
   produced across representative seeds.
-- [ ] Visually inspect uplift, trench, and rift effects on the globe.
-- [ ] Repeat generation with an unchanged seed and compare classifications and
+- [x] Visually inspect uplift, trench, and rift effects on the globe.
+- [x] Repeat generation with an unchanged seed and compare classifications and
   elevations.
 
 **Dependencies:** Task 2

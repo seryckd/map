@@ -1,4 +1,5 @@
 import {
+  applyTectonicRelief,
   generateIcosphereCells,
   generatePlateTerrain
 } from "./tectonic-globe-core.mjs";
@@ -26,20 +27,41 @@ function showError(error) {
   cellCount.textContent = "Generation failed";
 }
 
+function getVertexElevations(cells) {
+  const elevationTotals = new Map();
+  const vertexCounts = new Map();
+  for (const cell of cells) {
+    for (const vertex of cell.vertices) {
+      const key = `${vertex.x},${vertex.y},${vertex.z}`;
+      elevationTotals.set(key, (elevationTotals.get(key) || 0) + cell.elevation);
+      vertexCounts.set(key, (vertexCounts.get(key) || 0) + 1);
+    }
+  }
+  return new Map([...elevationTotals].map(([key, total]) => [
+    key,
+    total / vertexCounts.get(key)
+  ]));
+}
+
 function createCellGeometry(cells) {
   const positions = new Float32Array(cells.length * 9);
   const colors = new Float32Array(cells.length * 9);
+  const vertexElevations = getVertexElevations(cells);
   const crustColors = {
     continental: [0.72, 0.57, 0.36],
     oceanic: [0.18, 0.43, 0.56]
   };
+
   let offset = 0;
   for (const cell of cells) {
     const color = crustColors[cell.crustType];
     for (const vertex of cell.vertices) {
-      positions[offset++] = vertex.x;
-      positions[offset++] = vertex.y;
-      positions[offset++] = vertex.z;
+      const key = `${vertex.x},${vertex.y},${vertex.z}`;
+      const elevation = vertexElevations.get(key);
+      const radius = 1 + elevation * 0.3;
+      positions[offset++] = vertex.x * radius;
+      positions[offset++] = vertex.y * radius;
+      positions[offset++] = vertex.z * radius;
       colors[offset - 3] = color[0];
       colors[offset - 2] = color[1];
       colors[offset - 1] = color[2];
@@ -52,7 +74,40 @@ function createCellGeometry(cells) {
   return geometry;
 }
 
-function renderCells(cells) {
+function createBoundaryGeometry(cells, boundaries) {
+  const positions = new Float32Array(boundaries.length * 6);
+  const colors = new Float32Array(boundaries.length * 6);
+  const vertexElevations = getVertexElevations(cells);
+  const boundaryColors = {
+    convergent: [0.94, 0.35, 0.28],
+    divergent: [0.36, 0.78, 0.91],
+    transform: [0.98, 0.79, 0.34]
+  };
+  let offset = 0;
+  for (const boundary of boundaries) {
+    const cellA = cells[boundary.cellA];
+    const cellB = cells[boundary.cellB];
+    const sharedVertices = cellA.vertices.filter(vertex => cellB.vertices.includes(vertex));
+    const color = boundaryColors[boundary.type];
+    for (const vertex of sharedVertices) {
+      const key = `${vertex.x},${vertex.y},${vertex.z}`;
+      const radius = 1 + vertexElevations.get(key) * 0.3 + 0.006;
+      positions[offset] = vertex.x * radius;
+      positions[offset + 1] = vertex.y * radius;
+      positions[offset + 2] = vertex.z * radius;
+      colors[offset] = color[0];
+      colors[offset + 1] = color[1];
+      colors[offset + 2] = color[2];
+      offset += 3;
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  return geometry;
+}
+
+function renderCells(cells, boundaries) {
   const geometry = createCellGeometry(cells);
   const surface = new THREE.Mesh(
     geometry,
@@ -66,6 +121,10 @@ function renderCells(cells) {
     new THREE.EdgesGeometry(geometry),
     new THREE.LineBasicMaterial({ color: 0x142a32, transparent: true, opacity: 0.7 })
   );
+  const boundaryLines = new THREE.LineSegments(
+    createBoundaryGeometry(cells, boundaries),
+    new THREE.LineBasicMaterial({ vertexColors: true, linewidth: 2 })
+  );
 
   for (const child of globeGroup.children) {
     child.geometry?.dispose();
@@ -76,7 +135,7 @@ function renderCells(cells) {
     }
   }
   globeGroup.clear();
-  globeGroup.add(surface, edges);
+  globeGroup.add(surface, edges, boundaryLines);
 }
 
 function generate() {
@@ -91,16 +150,20 @@ function generate() {
   status.textContent = "Generating spherical cells…";
   try {
     const cells = generateIcosphereCells(seed, SUBDIVISIONS);
-    const { cells: terrainCells, plates } = generatePlateTerrain(
+    const { cells: platedCells, plates } = generatePlateTerrain(
       cells,
       seed,
       Number(continentalInput.value) / 100
     );
-    currentCells = terrainCells;
-    renderCells(currentCells);
+    const tectonicTerrain = applyTectonicRelief(platedCells, plates, seed);
+    currentCells = tectonicTerrain.cells;
+    renderCells(currentCells, tectonicTerrain.boundaries);
     cellCount.textContent = `${currentCells.length.toLocaleString()} spherical cells · ${plates.length} plates`;
-    const continentalCount = plates.filter(plate => plate.crustType === "continental").length;
-    status.textContent = `Globe ready · seed “${seed}” · ${continentalCount} continental / ${plates.length - continentalCount} oceanic plates`;
+    const boundaryCounts = tectonicTerrain.boundaries.reduce((counts, boundary) => {
+      counts[boundary.type]++;
+      return counts;
+    }, { convergent: 0, divergent: 0, transform: 0 });
+    status.textContent = `Globe ready · seed “${seed}” · C ${boundaryCounts.convergent} / D ${boundaryCounts.divergent} / T ${boundaryCounts.transform}`;
   } catch (error) {
     showError(error);
   } finally {
