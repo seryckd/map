@@ -455,3 +455,7 @@ export function applyGlobalShaping(cells, seed, globalBias = 0) {
 
   return { cells: shapedCells };
 }
+
+export function getSurfaceElevation(cell) {
+  return cell.elevation - (cell.globalBias ?? 0);
+}

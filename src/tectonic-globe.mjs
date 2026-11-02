@@ -2,7 +2,8 @@ import {
   applyTectonicRelief,
   generateIcosphereCells,
   generatePlateTerrain,
-  applyGlobalShaping
+  applyGlobalShaping,
+  getSurfaceElevation
 } from "./tectonic-globe-core.mjs";
 
 const canvas = document.getElementById("globe");
@@ -37,7 +38,10 @@ function getVertexElevations(cells) {
   for (const cell of cells) {
     for (const vertex of cell.vertices) {
       const key = `${vertex.x},${vertex.y},${vertex.z}`;
-      elevationTotals.set(key, (elevationTotals.get(key) || 0) + cell.elevation);
+      elevationTotals.set(
+        key,
+        (elevationTotals.get(key) || 0) + getSurfaceElevation(cell)
+      );
       vertexCounts.set(key, (vertexCounts.get(key) || 0) + 1);
     }
   }
@@ -47,18 +51,25 @@ function getVertexElevations(cells) {
   ]));
 }
 
+function getElevationColor(elevation) {
+  const clamp = value => Math.max(0, Math.min(1, value));
+  const mix = (start, end, amount) => start.map((value, index) =>
+    value + (end[index] - value) * amount);
+
+  if (elevation < 0) {
+    return mix([0.3, 0.59, 0.68], [0.07, 0.22, 0.34], clamp(-elevation / 0.5));
+  }
+  return mix([0.74, 0.69, 0.48], [0.49, 0.37, 0.26], clamp(elevation / 0.45));
+}
+
 function createCellGeometry(cells) {
   const positions = new Float32Array(cells.length * 9);
   const colors = new Float32Array(cells.length * 9);
   const vertexElevations = getVertexElevations(cells);
-  const crustColors = {
-    continental: [0.72, 0.57, 0.36],
-    oceanic: [0.18, 0.43, 0.56]
-  };
 
   let offset = 0;
   for (const cell of cells) {
-    const color = crustColors[cell.crustType];
+    const color = getElevationColor(cell.elevation);
     for (const vertex of cell.vertices) {
       const key = `${vertex.x},${vertex.y},${vertex.z}`;
       const elevation = vertexElevations.get(key);

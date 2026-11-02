@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   applyTectonicRelief,
   applyGlobalShaping,
+  getSurfaceElevation,
   generateIcosphereCells,
   generatePlateTerrain
 } from "./tectonic-globe-core.mjs";
@@ -231,4 +232,20 @@ test("rejects an invalid global elevation bias", () => {
   const tectonic = applyTectonicRelief(terrain.cells, terrain.plates, "global-world");
   assert.throws(() => applyGlobalShaping(tectonic.cells, "global-world", -1), RangeError);
   assert.throws(() => applyGlobalShaping(tectonic.cells, "global-world", 1), RangeError);
+});
+
+test("global bias shifts sea level without changing rendered terrain relief", () => {
+  const cells = generateIcosphereCells("bias-rendering", 3);
+  const terrain = generatePlateTerrain(cells, "bias-rendering", 0.4);
+  const tectonic = applyTectonicRelief(terrain.cells, terrain.plates, "bias-rendering");
+  const lowBias = applyGlobalShaping(tectonic.cells, "bias-rendering", -0.26);
+  const highBias = applyGlobalShaping(tectonic.cells, "bias-rendering", 0.21);
+
+  assert.notEqual(lowBias.cells[0].elevation, highBias.cells[0].elevation);
+  for (const cell of lowBias.cells) {
+    assert.ok(Math.abs(
+      getSurfaceElevation(cell)
+        - getSurfaceElevation(highBias.cells[cell.index])
+    ) < 1e-12);
+  }
 });
