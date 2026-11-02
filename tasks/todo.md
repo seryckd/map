@@ -107,24 +107,26 @@ uplift, trench, rift, or shear relief.
 
 ## Task 4: Add spherical global shaping, shelves, and ridges
 
+**Status:** Complete; verified with Node unit tests and Chromium.
+
 **Description:** Add global elevation/sea-level bias control and shape the
 baseline plus tectonic relief into a useful land/sea distribution. Blend
 continental shelves and deterministic low-frequency ridged features using
 spherical sampling; do not apply a center-focused mask.
 
 **Acceptance criteria:**
-- [ ] Users can adjust the global land/sea distribution without introducing a
+- [x] Users can adjust the global land/sea distribution without introducing a
   radial island mask.
-- [ ] Continental margins transition through shallow shelves toward deeper
+- [x] Continental margins transition through shallow shelves toward deeper
   ocean; low-frequency ridged features contribute macro relief.
-- [ ] Sampling and output remain continuous across the longitude seam and
+- [x] Sampling and output remain continuous across the longitude seam and
   near the poles.
 
 **Verification:**
-- [ ] Adjust the global bias and continental proportion; confirm the coastline
+- [x] Adjust the global bias and continental proportion; confirm the coastline
   and sea/land balance respond.
-- [ ] Inspect margin shelves and ridge features visually.
-- [ ] Compare neighboring cells around the seam and near the poles for
+- [x] Inspect margin shelves and ridge features visually.
+- [x] Compare neighboring cells around the seam and near the poles for
   discontinuities.
 
 **Dependencies:** Task 3

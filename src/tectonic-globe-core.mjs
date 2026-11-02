@@ -374,3 +374,84 @@ export function applyTectonicRelief(cells, plates, seed) {
 
   return { cells: terrainCells, plates: movingPlates, boundaries };
 }
+
+function calculateCellDistances(cells, startIndices) {
+  const distances = new Array(cells.length).fill(Infinity);
+  const queue = [];
+  for (const index of startIndices) {
+    distances[index] = 0;
+    queue.push(index);
+  }
+
+  for (let cursor = 0; cursor < queue.length; cursor++) {
+    const index = queue[cursor];
+    for (const neighborIndex of cells[index].neighbors) {
+      if (distances[neighborIndex] !== Infinity) continue;
+      distances[neighborIndex] = distances[index] + 1;
+      queue.push(neighborIndex);
+    }
+  }
+  return distances;
+}
+
+export function applyGlobalShaping(cells, seed, globalBias = 0) {
+  if (!Array.isArray(cells) || cells.length === 0) {
+    throw new RangeError("Spherical cells are required for global shaping.");
+  }
+  if (!Number.isFinite(globalBias) || globalBias < -0.5 || globalBias > 0.5) {
+    throw new RangeError("Global elevation bias must be a number from -0.5 to 0.5.");
+  }
+
+  const random = createRandom(`${seed}:macro-features`);
+  const ridgeFields = Array.from({ length: 4 }, () => {
+    const z = random() * 2 - 1;
+    const angle = random() * Math.PI * 2;
+    const radius = Math.sqrt(1 - z * z);
+    return {
+      direction: {
+        x: radius * Math.cos(angle),
+        y: z,
+        z: radius * Math.sin(angle)
+      },
+      frequency: 2 + random() * 2,
+      phase: random() * Math.PI * 2
+    };
+  });
+  const continentalIndices = cells
+    .filter(cell => cell.crustType === "continental")
+    .map(cell => cell.index);
+  const marginIndices = cells
+    .filter(cell => cell.neighbors.some(neighborIndex =>
+      cells[neighborIndex].crustType !== cell.crustType))
+    .map(cell => cell.index);
+  const continentalDistances = calculateCellDistances(cells, continentalIndices);
+  const marginDistances = calculateCellDistances(cells, marginIndices);
+  const shelfStrength = [0.07, 0.05, 0.032, 0.015];
+
+  const shapedCells = cells.map(cell => {
+    const continentalDistance = continentalDistances[cell.index];
+    const shelfEffect = cell.crustType === "oceanic" && continentalDistance < shelfStrength.length
+      ? shelfStrength[continentalDistance]
+      : 0;
+    const ridgeWeight = Math.max(0, 1 - marginDistances[cell.index] / 5);
+    const ridgeSignal = ridgeFields.reduce((total, field) => {
+      const projection = cell.center.x * field.direction.x
+        + cell.center.y * field.direction.y
+        + cell.center.z * field.direction.z;
+      return total + 2 * (1 - Math.abs(Math.sin(
+        projection * field.frequency * Math.PI + field.phase
+      ))) - 1;
+    }, 0) / ridgeFields.length;
+    const ridgeEffect = ridgeSignal * ridgeWeight * 0.035;
+    const baseElevation = cell.elevation;
+    return {
+      ...cell,
+      shelfEffect,
+      ridgeEffect,
+      globalBias,
+      elevation: baseElevation + globalBias + shelfEffect + ridgeEffect
+    };
+  });
+
+  return { cells: shapedCells };
+}

@@ -71,6 +71,9 @@
         <label for="continental-proportion">Continental plates <output id="continental-value" for="continental-proportion">40%</output>
           <input id="continental-proportion" type="range" min="0" max="100" step="5" value="40" />
         </label>
+        <label for="global-bias">Global land/sea bias <output id="global-bias-value" for="global-bias">0%</output>
+          <input id="global-bias" type="range" min="-30" max="30" step="1" value="0" />
+        </label>
         <button id="generate" type="button">Generate globe</button>
         <span class="cell-count" id="cell-count">Preparing mesh…</span>
       </div>

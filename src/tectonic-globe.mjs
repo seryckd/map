@@ -1,7 +1,8 @@
 import {
   applyTectonicRelief,
   generateIcosphereCells,
-  generatePlateTerrain
+  generatePlateTerrain,
+  applyGlobalShaping
 } from "./tectonic-globe-core.mjs";
 
 const canvas = document.getElementById("globe");
@@ -9,10 +10,13 @@ const viewport = document.getElementById("viewport");
 const seedInput = document.getElementById("seed");
 const continentalInput = document.getElementById("continental-proportion");
 const continentalValue = document.getElementById("continental-value");
+const globalBiasInput = document.getElementById("global-bias");
+const globalBiasValue = document.getElementById("global-bias-value");
 const generateButton = document.getElementById("generate");
 const status = document.getElementById("status");
 const cellCount = document.getElementById("cell-count");
 const SUBDIVISIONS = 3;
+const ELEVATION_EXAGGERATION = 0.55;
 
 let currentCells = [];
 let THREE;
@@ -58,7 +62,7 @@ function createCellGeometry(cells) {
     for (const vertex of cell.vertices) {
       const key = `${vertex.x},${vertex.y},${vertex.z}`;
       const elevation = vertexElevations.get(key);
-      const radius = 1 + elevation * 0.3;
+      const radius = 1 + elevation * ELEVATION_EXAGGERATION;
       positions[offset++] = vertex.x * radius;
       positions[offset++] = vertex.y * radius;
       positions[offset++] = vertex.z * radius;
@@ -91,7 +95,7 @@ function createBoundaryGeometry(cells, boundaries) {
     const color = boundaryColors[boundary.type];
     for (const vertex of sharedVertices) {
       const key = `${vertex.x},${vertex.y},${vertex.z}`;
-      const radius = 1 + vertexElevations.get(key) * 0.3 + 0.006;
+      const radius = 1 + vertexElevations.get(key) * ELEVATION_EXAGGERATION + 0.006;
       positions[offset] = vertex.x * radius;
       positions[offset + 1] = vertex.y * radius;
       positions[offset + 2] = vertex.z * radius;
@@ -156,14 +160,22 @@ function generate() {
       Number(continentalInput.value) / 100
     );
     const tectonicTerrain = applyTectonicRelief(platedCells, plates, seed);
-    currentCells = tectonicTerrain.cells;
+    const shapedTerrain = applyGlobalShaping(
+      tectonicTerrain.cells,
+      seed,
+      Number(globalBiasInput.value) / 100
+    );
+    currentCells = shapedTerrain.cells;
     renderCells(currentCells, tectonicTerrain.boundaries);
     cellCount.textContent = `${currentCells.length.toLocaleString()} spherical cells · ${plates.length} plates`;
+    const landPercentage = Math.round(
+      currentCells.filter(cell => cell.elevation > 0).length / currentCells.length * 100
+    );
     const boundaryCounts = tectonicTerrain.boundaries.reduce((counts, boundary) => {
       counts[boundary.type]++;
       return counts;
     }, { convergent: 0, divergent: 0, transform: 0 });
-    status.textContent = `Globe ready · seed “${seed}” · C ${boundaryCounts.convergent} / D ${boundaryCounts.divergent} / T ${boundaryCounts.transform}`;
+    status.textContent = `Globe ready · seed “${seed}” · ${landPercentage}% land · C ${boundaryCounts.convergent} / D ${boundaryCounts.divergent} / T ${boundaryCounts.transform}`;
   } catch (error) {
     showError(error);
   } finally {
@@ -178,7 +190,7 @@ async function initialize() {
 
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(36, 1, 0.1, 100);
-    camera.position.set(0, 0, 3.4);
+    camera.position.set(0, 0, 4.5);
     renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setSize(viewport.clientWidth, viewport.clientHeight, false);
@@ -212,6 +224,10 @@ async function initialize() {
       continentalValue.value = `${continentalInput.value}%`;
     });
     continentalInput.addEventListener("change", generate);
+    globalBiasInput.addEventListener("input", () => {
+      globalBiasValue.value = `${globalBiasInput.value}%`;
+    });
+    globalBiasInput.addEventListener("change", generate);
     seedInput.addEventListener("keydown", event => {
       if (event.key === "Enter") generate();
     });
@@ -227,6 +243,7 @@ async function initialize() {
     showError(error);
     generateButton.disabled = true;
     continentalInput.disabled = true;
+    globalBiasInput.disabled = true;
   }
 }
 

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   applyTectonicRelief,
+  applyGlobalShaping,
   generateIcosphereCells,
   generatePlateTerrain
 } from "./tectonic-globe-core.mjs";
@@ -166,4 +167,68 @@ test("produces all boundary classes across representative seeded worlds", () => 
     result.boundaries.forEach(boundary => observedTypes.add(boundary.type));
   }
   assert.deepEqual(observedTypes, requiredTypes);
+});
+
+test("global elevation bias changes land-sea balance without altering plate data", () => {
+  const cells = generateIcosphereCells("global-world", 3);
+  const terrain = generatePlateTerrain(cells, "global-world", 0.4);
+  const tectonic = applyTectonicRelief(terrain.cells, terrain.plates, "global-world");
+  const lowBias = applyGlobalShaping(tectonic.cells, "global-world", -0.2);
+  const highBias = applyGlobalShaping(tectonic.cells, "global-world", 0.2);
+  const lowLand = lowBias.cells.filter(cell => cell.elevation > 0).length;
+  const highLand = highBias.cells.filter(cell => cell.elevation > 0).length;
+
+  assert.ok(highBias.cells.reduce((sum, cell) => sum + cell.elevation, 0)
+    > lowBias.cells.reduce((sum, cell) => sum + cell.elevation, 0));
+  assert.ok(highLand > lowLand);
+  for (const cell of highBias.cells) {
+    assert.equal(cell.plateId, tectonic.cells[cell.index].plateId);
+    assert.equal(cell.tectonicRelief, tectonic.cells[cell.index].tectonicRelief);
+  }
+});
+
+test("adds deterministic continental shelves and margin ridged features", () => {
+  const cells = generateIcosphereCells("margin-world", 3);
+  const terrain = generatePlateTerrain(cells, "margin-world", 0.4);
+  const tectonic = applyTectonicRelief(terrain.cells, terrain.plates, "margin-world");
+  const shaped = applyGlobalShaping(tectonic.cells, "margin-world");
+  const repeated = applyGlobalShaping(tectonic.cells, "margin-world");
+  const shelfCells = shaped.cells.filter(cell =>
+    cell.crustType === "oceanic" && cell.shelfEffect > 0);
+  const deepOcean = shaped.cells.filter(cell =>
+    cell.crustType === "oceanic" && cell.shelfEffect === 0);
+  const ridgedCells = shaped.cells.filter(cell => cell.ridgeEffect !== 0);
+
+  assert.deepEqual(shaped, repeated);
+  assert.ok(shelfCells.length > 0);
+  assert.ok(deepOcean.length > 0);
+  assert.ok(Math.min(...shelfCells.map(cell => cell.elevation))
+    > Math.min(...deepOcean.map(cell => cell.elevation)));
+  assert.ok(ridgedCells.some(cell => cell.ridgeEffect > 0));
+  assert.ok(ridgedCells.some(cell => cell.ridgeEffect < 0));
+  assert.ok(shaped.cells.every(cell => Math.abs(cell.ridgeEffect) <= 0.04));
+});
+
+test("samples macro ridges smoothly across spherical neighbors and polar cells", () => {
+  const cells = generateIcosphereCells("spherical-features", 3);
+  const terrain = generatePlateTerrain(cells, "spherical-features", 0.4);
+  const tectonic = applyTectonicRelief(terrain.cells, terrain.plates, "spherical-features");
+  const { cells: shaped } = applyGlobalShaping(tectonic.cells, "spherical-features");
+  const polarCells = shaped.filter(cell => Math.abs(cell.center.y) > 0.9);
+
+  assert.ok(polarCells.length > 0);
+  assert.ok(shaped.every(cell => Number.isFinite(cell.ridgeEffect)));
+  for (const cell of shaped) {
+    for (const neighborIndex of cell.neighbors) {
+      assert.ok(Math.abs(cell.ridgeEffect - shaped[neighborIndex].ridgeEffect) < 0.04);
+    }
+  }
+});
+
+test("rejects an invalid global elevation bias", () => {
+  const cells = generateIcosphereCells("global-world", 1);
+  const terrain = generatePlateTerrain(cells, "global-world", 0.4);
+  const tectonic = applyTectonicRelief(terrain.cells, terrain.plates, "global-world");
+  assert.throws(() => applyGlobalShaping(tectonic.cells, "global-world", -1), RangeError);
+  assert.throws(() => applyGlobalShaping(tectonic.cells, "global-world", 1), RangeError);
 });
