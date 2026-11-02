@@ -1,5 +1,6 @@
 const GOLDEN_RATIO = (1 + Math.sqrt(5)) / 2;
 const MAX_SUBDIVISIONS = 5;
+const MAX_PLATES = 18;
 
 function normalize(vector) {
   const length = Math.hypot(vector.x, vector.y, vector.z);
@@ -163,4 +164,78 @@ export function generateIcosphereCells(seed, subdivisions = 2) {
       neighbors: [...neighbors[index]].sort((left, right) => left - right)
     };
   });
+}
+
+export function generatePlateTerrain(cells, seed, continentalProportion = 0.4) {
+  if (!Array.isArray(cells) || cells.length < 2) {
+    throw new RangeError("At least two spherical cells are required to generate plates.");
+  }
+  if (!Number.isFinite(continentalProportion)
+    || continentalProportion < 0
+    || continentalProportion > 1) {
+    throw new RangeError("Continental proportion must be a number from 0 to 1.");
+  }
+
+  const random = createRandom(`${seed}:plates`);
+  const plateCount = Math.min(
+    MAX_PLATES,
+    Math.max(2, Math.round(Math.sqrt(cells.length / 4)))
+  );
+  const plates = Array.from({ length: plateCount }, (_, id) => {
+    const z = random() * 2 - 1;
+    const angle = random() * Math.PI * 2;
+    const radius = Math.sqrt(1 - z * z);
+    return {
+      id,
+      center: {
+        x: radius * Math.cos(angle),
+        y: z,
+        z: radius * Math.sin(angle)
+      }
+    };
+  });
+
+  const continentalCount = continentalProportion === 0
+    ? 0
+    : continentalProportion === 1
+      ? plateCount
+      : Math.min(
+        plateCount - 1,
+        Math.max(1, Math.round(plateCount * continentalProportion))
+      );
+  const plateOrder = plates.map(plate => plate.id);
+  for (let index = plateOrder.length - 1; index > 0; index--) {
+    const swapIndex = Math.floor(random() * (index + 1));
+    [plateOrder[index], plateOrder[swapIndex]] = [plateOrder[swapIndex], plateOrder[index]];
+  }
+
+  for (let index = 0; index < plates.length; index++) {
+    const crustType = index < continentalCount ? "continental" : "oceanic";
+    const baseElevation = crustType === "continental" ? 0.18 : -0.2;
+    plates[plateOrder[index]].crustType = crustType;
+    plates[plateOrder[index]].baseElevation = baseElevation + (random() - 0.5) * 0.05;
+  }
+
+  const terrainCells = cells.map(cell => {
+    let nearestPlate = plates[0];
+    let nearestDistance = -Infinity;
+    for (const plate of plates) {
+      const distance = cell.center.x * plate.center.x
+        + cell.center.y * plate.center.y
+        + cell.center.z * plate.center.z;
+      if (distance > nearestDistance) {
+        nearestPlate = plate;
+        nearestDistance = distance;
+      }
+    }
+
+    return {
+      ...cell,
+      plateId: nearestPlate.id,
+      crustType: nearestPlate.crustType,
+      elevation: nearestPlate.baseElevation + (random() - 0.5) * 0.03
+    };
+  });
+
+  return { cells: terrainCells, plates };
 }

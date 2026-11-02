@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { generateIcosphereCells } from "./tectonic-globe-core.mjs";
+import {
+  generateIcosphereCells,
+  generatePlateTerrain
+} from "./tectonic-globe-core.mjs";
 
 test("generates four triangular neighbors for each spherical cell", () => {
   const cells = generateIcosphereCells("test-world", 2);
@@ -55,4 +58,40 @@ test("changes the spherical cell orientation when the seed changes", () => {
 test("rejects subdivision levels outside the supported range", () => {
   assert.throws(() => generateIcosphereCells("world", -1), RangeError);
   assert.throws(() => generateIcosphereCells("world", 8), RangeError);
+});
+
+test("assigns deterministic spherical plates and distinct crust elevations", () => {
+  const cells = generateIcosphereCells("plate-world", 2);
+  const result = generatePlateTerrain(cells, "plate-world", 0.4);
+  const repeated = generatePlateTerrain(cells, "plate-world", 0.4);
+  const continental = result.cells.filter(cell => cell.crustType === "continental");
+  const oceanic = result.cells.filter(cell => cell.crustType === "oceanic");
+
+  assert.deepEqual(result, repeated);
+  assert.ok(result.plates.length >= 2);
+  assert.ok(continental.length > 0);
+  assert.ok(oceanic.length > 0);
+  assert.ok(Math.min(...continental.map(cell => cell.elevation))
+    > Math.max(...oceanic.map(cell => cell.elevation)));
+
+  for (const cell of result.cells) {
+    const plate = result.plates[cell.plateId];
+    assert.equal(cell.crustType, plate.crustType);
+    const nearestPlate = result.plates.reduce((nearest, candidate) => {
+      const distance = cell.center.x * candidate.center.x
+        + cell.center.y * candidate.center.y
+        + cell.center.z * candidate.center.z;
+      return distance > nearest.distance ? { plate: candidate, distance } : nearest;
+    }, { plate: null, distance: -Infinity });
+    assert.equal(cell.plateId, nearestPlate.plate.id);
+  }
+
+  assert.ok(result.cells.some(cell => cell.neighbors.some(neighborIndex =>
+    result.cells[neighborIndex].plateId !== cell.plateId)));
+});
+
+test("rejects an invalid continental plate proportion", () => {
+  const cells = generateIcosphereCells("plate-world", 0);
+  assert.throws(() => generatePlateTerrain(cells, "plate-world", -0.1), RangeError);
+  assert.throws(() => generatePlateTerrain(cells, "plate-world", 1.1), RangeError);
 });
