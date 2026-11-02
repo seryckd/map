@@ -18,9 +18,11 @@ are out of scope.
   polygon/Voronoi library. Plate membership is assigned by nearest plate seed
   under spherical angular distance, yielding an approximate spherical Voronoi
   partition.
-- **Keep computation and presentation in one standalone page.** Use a
-  version-pinned Three.js ES module and its matching `OrbitControls` addon from
-  the same CDN/version. No package or build system is introduced.
+- **Keep the browser app standalone while isolating pure generation logic.**
+  Put the page, browser interaction, and pure terrain core in plain HTML and
+  native ES modules. Use a version-pinned Three.js module and matching
+  `OrbitControls` addon from the same CDN/version. Node's built-in test runner
+  verifies pure logic without adding a package or build system.
 - **Represent plate movement with spherical rotation vectors.** Relative
   tangential velocity across each inter-plate boundary determines convergent,
   divergent, or transform classification. Apply bounded, simplified

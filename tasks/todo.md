@@ -2,6 +2,9 @@
 
 ## Task 1: Create a standalone interactive globe and seeded cell mesh
 
+**Status:** Implementation complete; browser visual verification is blocked
+because no browser or DevTools runtime is available in this environment.
+
 **Description:** Add the new standalone page with a version-pinned Three.js
 scene, orbit/zoom controls, a deterministic seed control, and an icosphere
 terrain mesh whose triangular faces have spherical cell records and neighbor
@@ -26,6 +29,9 @@ relationships. Keep the existing map page unchanged.
 
 **Files likely touched:**
 - `src/tectonic-globe.html`
+- `src/tectonic-globe.mjs`
+- `src/tectonic-globe-core.mjs`
+- `src/tectonic-globe.test.mjs`
 
 **Estimated scope:** Medium
 

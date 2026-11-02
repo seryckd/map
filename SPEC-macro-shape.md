@@ -24,11 +24,16 @@ and region extraction are not part of this work.
 
 - Serve locally: `python3 -m http.server 8000`
 - Open the page: `http://localhost:8000/src/tectonic-globe.html`
-- Build, test, and lint: no corresponding commands are currently configured.
+- Run spherical-mesh unit tests: `node --test src/tectonic-globe.test.mjs`
+- Build and lint: no corresponding commands are currently configured.
 
 ## Project Structure
 
 - `src/tectonic-globe.html` — new standalone Stage 1 generator and globe viewer.
+- `src/tectonic-globe.mjs` — browser rendering and interaction.
+- `src/tectonic-globe-core.mjs` — pure spherical mesh and terrain-generation
+  logic.
+- `src/tectonic-globe.test.mjs` — Node built-in unit tests for pure logic.
 - `research/terrain-pipeline.md` — source research for the five terrain steps.
 - `CAPABILITY-MAP.md` — initiative scope and capability dependencies.
 - `SPEC-macro-shape.md` — this module's requirements.
@@ -79,9 +84,11 @@ does not need to expose each step as a separate user-operated wizard page.
 
 ## Testing Strategy
 
-There is no test framework or browser automation configured in the project.
-For this capability:
+The project has no package-based test framework or browser automation. Use
+Node's built-in test runner for pure generation logic and manual browser
+verification for rendering and interaction:
 
+- Run `node --test src/tectonic-globe.test.mjs` for pure spherical mesh tests.
 - Manually load the page in a browser and confirm the globe renders, rotates,
   and zooms.
 - Check that all five generation steps complete and that the displayed globe
