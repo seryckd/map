@@ -46,17 +46,17 @@ are out of scope.
 
 ### Phase 1: Interactive spherical foundation
 
-- [ ] Task 1: Create a standalone interactive globe and seeded cell mesh
-- [ ] Task 2: Generate spherical plates and baseline crust elevation
+- [x] Task 1: Create a standalone interactive globe and seeded cell mesh
+- [x] Task 2: Generate spherical plates and baseline crust elevation
 
 ### Checkpoint: Foundation
 
-- [ ] The standalone page loads from a local HTTP server.
-- [ ] The globe rotates and zooms; the cell mesh is visible across poles and
+- [x] The standalone page loads from a local HTTP server.
+- [x] The globe rotates and zooms; the cell mesh is visible across poles and
   the longitude seam.
-- [ ] Plate and crust generation is repeatable for a fixed seed and renders
+- [x] Plate and crust generation is repeatable for a fixed seed and renders
   both continental and oceanic regions.
-- [ ] Review the in-memory cell and adjacency representation before proceeding.
+- [x] Review the in-memory cell and adjacency representation before proceeding.
 
 ### Phase 2: Tectonic macro relief
 

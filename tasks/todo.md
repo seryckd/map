@@ -41,23 +41,25 @@ warnings during headless rendering; no page JavaScript errors were observed.
 
 ## Task 2: Generate spherical plates and baseline crust elevation
 
+**Status:** Complete; verified with Node unit tests and Chromium.
+
 **Description:** Assign seeded spherical plate centers and plate identifiers
 to terrain cells, classify plates as continental or oceanic, and compute
 baseline elevation from simplified crust properties. Add a continental
 proportion control and preserve the resulting data in each cell record.
 
 **Acceptance criteria:**
-- [ ] Cells are assigned to a plate by spherical nearest-seed distance and
+- [x] Cells are assigned to a plate by spherical nearest-seed distance and
   adjacent cells expose plate boundaries.
-- [ ] Continental and oceanic plates have distinct baseline elevation and
+- [x] Continental and oceanic plates have distinct baseline elevation and
   crust metadata.
-- [ ] A fixed seed and settings reproduce plate assignments and baseline
+- [x] A fixed seed and settings reproduce plate assignments and baseline
   elevations; changing the seed changes the generated world.
 
 **Verification:**
-- [ ] Use the browser to inspect plate assignments and confirm both crust
+- [x] Use the browser to inspect plate assignments and confirm both crust
   classes are present.
-- [ ] Compare the in-memory plate and elevation data across repeated seeded
+- [x] Compare the in-memory plate and elevation data across repeated seeded
   generations.
 
 **Dependencies:** Task 1
@@ -69,8 +71,8 @@ proportion control and preserve the resulting data in each cell record.
 
 ## Checkpoint: Foundation
 
-- [ ] Tasks 1-2 acceptance criteria pass through browser inspection.
-- [ ] Confirm the per-cell data and adjacency support the next boundary stage.
+- [x] Tasks 1-2 acceptance criteria pass through browser inspection.
+- [x] Confirm the per-cell data and adjacency support the next boundary stage.
 
 ## Task 3: Classify moving plate boundaries and apply tectonic relief
 
