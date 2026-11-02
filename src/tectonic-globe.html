@@ -22,6 +22,8 @@
     label { display: grid; gap: 4px; color: #9cabb6; font-size: 12px; }
     input, button { height: 40px; border: 1px solid #344955; border-radius: 7px; background: #0c171f; color: inherit; font: inherit; }
     input { width: 220px; padding: 0 10px; }
+    input[type="range"] { width: 170px; height: 24px; padding: 0; accent-color: #77bec4; }
+    output { color: #e8edf0; font-variant-numeric: tabular-nums; }
     button { padding: 0 16px; border-color: #347e87; background: #1d5e66; font-weight: 700; cursor: pointer; }
     button:hover { background: #27737b; }
     button:disabled { cursor: wait; opacity: .7; }
@@ -61,6 +63,9 @@
       <div class="toolbar">
         <label for="seed">World seed
           <input id="seed" type="text" value="basalt-4812" autocomplete="off" />
+        </label>
+        <label for="continental-proportion">Continental plates <output id="continental-value" for="continental-proportion">40%</output>
+          <input id="continental-proportion" type="range" min="0" max="100" step="5" value="40" />
         </label>
         <button id="generate" type="button">Generate globe</button>
         <span class="cell-count" id="cell-count">Preparing mesh…</span>

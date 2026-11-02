@@ -1,8 +1,13 @@
-import { generateIcosphereCells } from "./tectonic-globe-core.mjs";
+import {
+  generateIcosphereCells,
+  generatePlateTerrain
+} from "./tectonic-globe-core.mjs";
 
 const canvas = document.getElementById("globe");
 const viewport = document.getElementById("viewport");
 const seedInput = document.getElementById("seed");
+const continentalInput = document.getElementById("continental-proportion");
+const continentalValue = document.getElementById("continental-value");
 const generateButton = document.getElementById("generate");
 const status = document.getElementById("status");
 const cellCount = document.getElementById("cell-count");
@@ -23,16 +28,26 @@ function showError(error) {
 
 function createCellGeometry(cells) {
   const positions = new Float32Array(cells.length * 9);
+  const colors = new Float32Array(cells.length * 9);
+  const crustColors = {
+    continental: [0.72, 0.57, 0.36],
+    oceanic: [0.18, 0.43, 0.56]
+  };
   let offset = 0;
   for (const cell of cells) {
+    const color = crustColors[cell.crustType];
     for (const vertex of cell.vertices) {
       positions[offset++] = vertex.x;
       positions[offset++] = vertex.y;
       positions[offset++] = vertex.z;
+      colors[offset - 3] = color[0];
+      colors[offset - 2] = color[1];
+      colors[offset - 1] = color[2];
     }
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
   geometry.computeVertexNormals();
   return geometry;
 }
@@ -42,7 +57,7 @@ function renderCells(cells) {
   const surface = new THREE.Mesh(
     geometry,
     new THREE.MeshStandardMaterial({
-      color: 0x4d8991,
+      vertexColors: true,
       roughness: 0.92,
       metalness: 0
     })
@@ -75,10 +90,17 @@ function generate() {
   generateButton.disabled = true;
   status.textContent = "Generating spherical cells…";
   try {
-    currentCells = generateIcosphereCells(seed, SUBDIVISIONS);
+    const cells = generateIcosphereCells(seed, SUBDIVISIONS);
+    const { cells: terrainCells, plates } = generatePlateTerrain(
+      cells,
+      seed,
+      Number(continentalInput.value) / 100
+    );
+    currentCells = terrainCells;
     renderCells(currentCells);
-    cellCount.textContent = `${currentCells.length.toLocaleString()} spherical cells`;
-    status.textContent = `Globe ready · seed “${seed}”`;
+    cellCount.textContent = `${currentCells.length.toLocaleString()} spherical cells · ${plates.length} plates`;
+    const continentalCount = plates.filter(plate => plate.crustType === "continental").length;
+    status.textContent = `Globe ready · seed “${seed}” · ${continentalCount} continental / ${plates.length - continentalCount} oceanic plates`;
   } catch (error) {
     showError(error);
   } finally {
@@ -123,6 +145,10 @@ async function initialize() {
     resizeObserver.observe(viewport);
 
     generateButton.addEventListener("click", generate);
+    continentalInput.addEventListener("input", () => {
+      continentalValue.value = `${continentalInput.value}%`;
+    });
+    continentalInput.addEventListener("change", generate);
     seedInput.addEventListener("keydown", event => {
       if (event.key === "Enter") generate();
     });
@@ -137,6 +163,7 @@ async function initialize() {
   } catch (error) {
     showError(error);
     generateButton.disabled = true;
+    continentalInput.disabled = true;
   }
 }
 

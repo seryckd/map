@@ -95,3 +95,15 @@ test("rejects an invalid continental plate proportion", () => {
   assert.throws(() => generatePlateTerrain(cells, "plate-world", -0.1), RangeError);
   assert.throws(() => generatePlateTerrain(cells, "plate-world", 1.1), RangeError);
 });
+
+test("changes plate terrain with a different seed and supports proportion endpoints", () => {
+  const cells = generateIcosphereCells("fixed-mesh", 2);
+  const firstWorld = generatePlateTerrain(cells, "first-world", 0.4);
+  const secondWorld = generatePlateTerrain(cells, "second-world", 0.4);
+  assert.notDeepEqual(firstWorld, secondWorld);
+
+  const allOceanic = generatePlateTerrain(cells, "fixed-mesh", 0);
+  const allContinental = generatePlateTerrain(cells, "fixed-mesh", 1);
+  assert.ok(allOceanic.plates.every(plate => plate.crustType === "oceanic"));
+  assert.ok(allContinental.plates.every(plate => plate.crustType === "continental"));
+});
